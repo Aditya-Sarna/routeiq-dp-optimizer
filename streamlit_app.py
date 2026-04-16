@@ -1,8 +1,8 @@
 """
-╔══════════════════════════════════════════════════════════════════╗
-║   RouteIQ — New Delhi DP Route Optimizer                         ║
-║   Held-Karp TSP  |  OpenStreetMap  |  Haversine Distances        ║
-╚══════════════════════════════════════════════════════════════════╝
+
+   RouteIQ — New Delhi DP Route Optimizer                         
+   Held-Karp TSP  |  OpenStreetMap  |  Haversine Distances        
+
 """
 
 import streamlit as st
@@ -13,19 +13,19 @@ import math
 import os
 import time
 
-# ──────────────────────────────────────────────────────
+# 
 # Page Config
-# ──────────────────────────────────────────────────────
+# 
 st.set_page_config(
     page_title="RouteIQ Delhi — DP Route Optimizer",
-    page_icon="🗺️",
+    page_icon="map",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ──────────────────────────────────────────────────────
+# 
 # CSS
-# ──────────────────────────────────────────────────────
+# 
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -66,9 +66,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────
+# 
 # New Delhi Landmarks
-# ──────────────────────────────────────────────────────
+# 
 DELHI_LANDMARKS = {
     "India Gate":             (28.6129, 77.2295),
     "Red Fort":               (28.6562, 77.2410),
@@ -141,9 +141,9 @@ if not os.path.isfile(CPP_BINARY) and os.path.isfile(CPP_SOURCE):
 
 INF = float('inf')
 
-# ──────────────────────────────────────────────────────
+# 
 # Haversine distance (km)
-# ──────────────────────────────────────────────────────
+# 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -159,9 +159,9 @@ def build_dist_matrix(locations):
                 locations[j]['lat'], locations[j]['lon'])
              for j in range(n)] for i in range(n)]
 
-# ──────────────────────────────────────────────────────
+# 
 # Held-Karp DP
-# ──────────────────────────────────────────────────────
+# 
 def held_karp_python(dist, n):
     if n == 1:
         return 0.0, [0, 0]
@@ -233,9 +233,9 @@ def optimize(locations):
     return {"total_cost": round(cost, 3), "path": path,
             "segments": segments, "dist": dist, "solver": solver}
 
-# ──────────────────────────────────────────────────────
+# 
 # Mapbox figure — OpenStreetMap, New Delhi
-# ──────────────────────────────────────────────────────
+# 
 DELHI_CENTER = {"lat": 28.6139, "lon": 77.2090}
 
 def make_map_figure(locations, result=None):
@@ -276,7 +276,7 @@ def make_map_figure(locations, result=None):
     for idx, loc in enumerate(locations):
         is_depot = idx == 0
         color    = "#ef4444" if is_depot else NODE_COLORS[idx % len(NODE_COLORS)]
-        label    = ("⚑ " if is_depot else f"{idx}. ") + loc["name"]
+        label    = ("[D] " if is_depot else f"{idx}. ") + loc["name"]
         fig.add_trace(go.Scattermapbox(
             lat=[loc['lat']], lon=[loc['lon']],
             mode="markers+text",
@@ -300,30 +300,30 @@ def make_map_figure(locations, result=None):
     )
     return fig
 
-# ──────────────────────────────────────────────────────
+# 
 # Session State
-# ──────────────────────────────────────────────────────
+# 
 for key, val in [("locations", []), ("result", None), ("optimize_time", None)]:
     if key not in st.session_state:
         st.session_state[key] = val
 
-# ──────────────────────────────────────────────────────
+# 
 # SIDEBAR
-# ──────────────────────────────────────────────────────
+# 
 with st.sidebar:
     st.markdown("""
     <div style="text-align:center;padding:12px 0 20px">
-      <div style="font-size:2.4rem;margin-bottom:6px">🗺️</div>
+      <div style="font-size:2.4rem;margin-bottom:6px">[ ]</div>
       <div style="font-size:1.2rem;font-weight:800;color:#f1f5f9">RouteIQ Delhi</div>
       <div style="font-size:0.75rem;color:#64748b;margin-top:4px">DP Route Optimizer · New Delhi</div>
     </div>""", unsafe_allow_html=True)
     st.divider()
 
-    # ── Demo Tours ──
+    #  Demo Tours 
     st.markdown('<div class="sidebar-label">Quick Demo Tours</div>', unsafe_allow_html=True)
     demo_choice = st.selectbox("Tour", list(DEMO_TOURS.keys()),
                                key="demo_choice", label_visibility="collapsed")
-    if st.button("🎲  Load Demo Tour", key="btn_demo"):
+    if st.button("Load Demo Tour", key="btn_demo"):
         locs = [{"name": name, "lat": DELHI_LANDMARKS[name][0],
                  "lon": DELHI_LANDMARKS[name][1], "index": i}
                 for i, name in enumerate(DEMO_TOURS[demo_choice])]
@@ -333,12 +333,12 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Add Landmark ──
+    #  Add Landmark 
     st.markdown('<div class="sidebar-label">Add Landmark</div>', unsafe_allow_html=True)
     added     = {loc["name"] for loc in st.session_state.locations}
     available = ["— select —"] + sorted(n for n in DELHI_LANDMARKS if n not in added)
     sel = st.selectbox("Landmark", available, key="lm_sel", label_visibility="collapsed")
-    if st.button("＋  Add Landmark", key="btn_add_lm"):
+    if st.button("+ Add Landmark", key="btn_add_lm"):
         if sel and sel != "— select —":
             lat, lon = DELHI_LANDMARKS[sel]
             n = len(st.session_state.locations)
@@ -348,7 +348,7 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Custom Location ──
+    #  Custom Location 
     st.markdown('<div class="sidebar-label">Custom Location</div>', unsafe_allow_html=True)
     cname = st.text_input("Name", placeholder="My Location", key="cname", label_visibility="collapsed")
     cc1, cc2 = st.columns(2)
@@ -356,7 +356,7 @@ with st.sidebar:
         clat = st.number_input("Lat", value=28.6139, format="%.4f", key="clat")
     with cc2:
         clon = st.number_input("Lon", value=77.2090, format="%.4f", key="clon")
-    if st.button("＋  Add Custom", key="btn_custom"):
+    if st.button("+ Add Custom", key="btn_custom"):
         n    = len(st.session_state.locations)
         name = cname.strip() or f"Location {n+1}"
         st.session_state.locations.append({"name": name, "lat": float(clat), "lon": float(clon), "index": n})
@@ -365,7 +365,7 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Stops List ──
+    #  Stops List 
     locs = st.session_state.locations
     if locs:
         st.markdown(f'<div class="sidebar-label">Stops ({len(locs)})</div>', unsafe_allow_html=True)
@@ -373,7 +373,7 @@ with st.sidebar:
         for i, loc in enumerate(locs):
             cl, cr = st.columns([5, 1])
             with cl:
-                tag   = "⚑" if i == 0 else str(i)
+                tag   = "D" if i == 0 else str(i)
                 color = "#ef4444" if i == 0 else "#60a5fa"
                 st.markdown(
                     f'<div style="padding:3px 0;font-size:0.8rem">'
@@ -382,7 +382,7 @@ with st.sidebar:
                     f'{loc["lat"]:.4f}, {loc["lon"]:.4f}</span></div>',
                     unsafe_allow_html=True)
             with cr:
-                if st.button("×", key=f"rm_{i}"):
+                if st.button("", key=f"rm_{i}"):
                     to_remove = i
         if to_remove is not None:
             st.session_state.locations.pop(to_remove)
@@ -391,12 +391,12 @@ with st.sidebar:
             st.session_state.result = None
             st.rerun()
         st.divider()
-        if st.button("🗑️  Clear All", key="btn_clear"):
+        if st.button("Clear All", key="btn_clear"):
             st.session_state.locations = []
             st.session_state.result    = None
             st.rerun()
 
-    # ── Algorithm Info ──
+    #  Algorithm Info 
     st.divider()
     st.markdown('<div class="sidebar-label">Algorithm Details</div>', unsafe_allow_html=True)
     n        = len(st.session_state.locations)
@@ -410,19 +410,19 @@ with st.sidebar:
       <tr><td>Space</td><td>O(n · 2ⁿ)</td></tr>
       <tr><td>Distance</td><td>Haversine (km)</td></tr>
       <tr><td>Map</td><td>OpenStreetMap</td></tr>
-      <tr><td>City</td><td>New Delhi 🇮🇳</td></tr>
+      <tr><td>City</td><td>New Delhi</td></tr>
       <tr><td>Nodes (n)</td><td>{n}</td></tr>
       <tr><td>DP States</td><td>{states:,}</td></tr>
       <tr><td>Subproblems</td><td>{subprobs:,}</td></tr>
-      <tr><td>Solver</td><td>{"C++ binary ✓" if cpp_ok else "Python ⚡"}</td></tr>
+      <tr><td>Solver</td><td>{"C++ binary" if cpp_ok else "Python"}</td></tr>
     </table>""", unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────
+# 
 # MAIN CONTENT
-# ──────────────────────────────────────────────────────
+# 
 st.markdown("""
 <div class="hero-card">
-  <div style="font-size:3rem">🗺️</div>
+  <div style="font-size:3rem">[ ]</div>
   <div>
     <div class="hero-title">RouteIQ — New Delhi Route Optimizer</div>
     <div class="hero-sub">Held-Karp Dynamic Programming on real New Delhi geography · Haversine distances · OpenStreetMap</div>
@@ -431,7 +431,7 @@ st.markdown("""
       <span class="badge badge-green">Exact Optimal Tour</span>
       <span class="badge badge-orange">Haversine km</span>
       <span class="badge badge-purple">C++ Engine</span>
-      <span class="badge badge-red">New Delhi 🇮🇳</span>
+      <span class="badge badge-red">New Delhi</span>
     </div>
   </div>
 </div>""", unsafe_allow_html=True)
@@ -453,7 +453,7 @@ map_col, info_col = st.columns([3, 1])
 with map_col:
     st.markdown('<div class="section-header">New Delhi — Route Map (OpenStreetMap)</div>', unsafe_allow_html=True)
     if n >= 2:
-        if st.button(f"✦  Run Held-Karp DP  ({n} stops)", key="btn_opt"):
+        if st.button(f"Run Held-Karp DP ({n} stops)", key="btn_opt"):
             with st.spinner("Computing optimal tour with Held-Karp DP..."):
                 t0  = time.perf_counter()
                 res = optimize(locs)
@@ -483,7 +483,7 @@ with info_col:
             loc      = locs[city_idx]
             is_depot = step_i == 0 or step_i == len(path)-1
             color    = "#ef4444" if is_depot else "#3b82f6"
-            label    = "⚑" if is_depot else f"#{step_i}"
+            label    = "[D]" if is_depot else f"#{step_i}"
             dist_tag = ""
             if step_i < len(segs):
                 dist_tag = f'<span style="float:right;color:#f59e0b;font-family:monospace;font-size:0.72rem">{segs[step_i]["distance"]:.2f} km</span>'
@@ -501,13 +501,13 @@ with info_col:
     else:
         st.markdown("""
         <div style="color:#334155;text-align:center;padding:40px 10px;font-size:0.88rem;line-height:1.8">
-          <div style="font-size:2rem;margin-bottom:10px">📍</div>
+          <div style="font-size:2rem;margin-bottom:10px">--</div>
           Load a demo tour or pick<br>landmarks, then click<br>
           <b style="color:#60a5fa">Run Held-Karp DP</b>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("📖 How Held-Karp DP Works"):
+    with st.expander("How Held-Karp DP Works"):
         st.markdown("""
 **Recurrence:**
 ```
@@ -525,7 +525,7 @@ dp[mask|(1<<v)][v] = dp[mask][u] + dist[u][v]
 
 st.divider()
 if locs:
-    with st.expander(f"🧮 Distance Matrix ({n}×{n}) — km"):
+    with st.expander(f"Distance Matrix ({n}x{n}) — km"):
         dist  = build_dist_matrix(locs)
         names = [l["name"] for l in locs]
         df_d  = pd.DataFrame([[round(dist[i][j], 2) for j in range(n)] for i in range(n)],
