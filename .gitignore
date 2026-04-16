@@ -1,0 +1,23 @@
+# Compiled binaries
+cpp_engine/route_optimizer
+cpp_engine/*.o
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+.env
+.venv
+env/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Streamlit secrets (never commit)
+.streamlit/secrets.toml
