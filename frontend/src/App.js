@@ -151,12 +151,14 @@ function App() {
     setTimeout(() => setError(null), 3500);
   };
 
-  // Reset the canvas/map when switching workspaces (data isn't compatible across modes)
-  useEffect(() => {
+  // Synchronous workspace switcher — clears incompatible state in the same render
+  const switchWorkspace = useCallback((next) => {
+    if (next === workspace) return;
     setLocations([]);
     setOptimizedPath(null);
     setError(null);
-    if (workspace === "map") setMode("grid"); // map only has click-to-drop or manual lat/lng
+    setMode("grid");
+    setWorkspace(next);
   }, [workspace]);
 
   const addLocation = useCallback(
@@ -523,7 +525,7 @@ function App() {
             <div className="flex items-stretch border border-[#27272A] bg-[#050505]" data-testid="workspace-toggle">
               <button
                 data-testid="workspace-canvas-btn"
-                onClick={() => setWorkspace("canvas")}
+                onClick={() => switchWorkspace("canvas")}
                 className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5 ${
                   workspace === "canvas"
                     ? "bg-white text-black"
@@ -534,7 +536,7 @@ function App() {
               </button>
               <button
                 data-testid="workspace-map-btn"
-                onClick={() => setWorkspace("map")}
+                onClick={() => switchWorkspace("map")}
                 className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5 ${
                   workspace === "map"
                     ? "bg-[#FDE047] text-black"

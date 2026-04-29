@@ -84,7 +84,7 @@ function FitBounds({ locations, optimizedPath }) {
 
 // ─────────── Main MapView ───────────
 export default function MapView({
-  locations,
+  locations: rawLocations,
   optimizedPath,
   onAdd,
   onHover,
@@ -93,6 +93,15 @@ export default function MapView({
   initialCenter = [28.6139, 77.209], // Delhi default — algorithmically neutral
   initialZoom = 5,
 }) {
+  // Defensive guard: only render entries that actually have numeric lat/lng.
+  // (Protects against transient renders where canvas-shaped {x,y} entries leak in.)
+  const locations = useMemo(
+    () =>
+      (rawLocations || []).filter(
+        (l) => typeof l?.lat === "number" && typeof l?.lng === "number"
+      ),
+    [rawLocations]
+  );
   // Build polyline for optimized tour
   const tourLine = useMemo(() => {
     if (!optimizedPath?.path_indices) return null;
