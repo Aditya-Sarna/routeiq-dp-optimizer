@@ -109,6 +109,31 @@ class TestOptimize:
         assert d["path_indices"][0] == 0 == d["path_indices"][-1]
         assert d["total_cost"] > 0
 
+    def test_optimize_haversine_manhattan_8(self, session):
+        # Manhattan preset from frontend MAP_PRESETS — 8 stops
+        locs = [
+            {"x": 0, "y": 0, "lat": 40.7033, "lng": -73.9881, "name": "Depot · DUMBO"},
+            {"x": 0, "y": 0, "lat": 40.7074, "lng": -74.0113, "name": "Wall Street"},
+            {"x": 0, "y": 0, "lat": 40.7233, "lng": -74.0030, "name": "SoHo"},
+            {"x": 0, "y": 0, "lat": 40.7580, "lng": -73.9855, "name": "Times Square"},
+            {"x": 0, "y": 0, "lat": 40.7829, "lng": -73.9654, "name": "Central Park"},
+            {"x": 0, "y": 0, "lat": 40.7489, "lng": -73.9680, "name": "UN Plaza"},
+            {"x": 0, "y": 0, "lat": 40.7466, "lng": -74.0011, "name": "Chelsea"},
+            {"x": 0, "y": 0, "lat": 40.8116, "lng": -73.9465, "name": "Harlem"},
+        ]
+        r = session.post(f"{API}/optimize", json={"locations": locs, "mode": "haversine"})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["n_locations"] == 8
+        assert d["path_indices"][0] == 0 == d["path_indices"][-1]
+        assert sorted(d["path_indices"][:-1]) == list(range(8))
+        # Total km should be in a reasonable Manhattan range (single to mid double-digit)
+        assert 5.0 < d["total_cost"] < 100.0, f"unexpected total_cost {d['total_cost']}"
+        # Each segment > 0 and total matches
+        total = sum(s["distance"] for s in d["segments"])
+        assert abs(d["total_cost"] - total) < 1e-2
+        assert len(d["segments"]) == 8
+
     def test_optimize_2_locations(self, session):
         locs = [{"x": 0, "y": 0}, {"x": 3, "y": 4}]
         r = session.post(f"{API}/optimize", json={"locations": locs, "mode": "euclidean"})

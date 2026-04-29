@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import "@/App.css";
+import "./components/leaflet-overrides.css";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,7 +18,10 @@ import {
   ArrowRight,
   Compass,
   Erase,
+  Globe,
+  ViewGrid,
 } from "iconoir-react";
+import MapView from "./components/MapView";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -47,6 +51,48 @@ const PRESETS = {
   "RANDOM · 10": null, // generated on demand
 };
 
+// Real-world map presets (lat, lng) — used by Map workspace
+const MAP_PRESETS = {
+  "DELHI–NCR · 6": [
+    { name: "Depot · Gurugram",       lat: 28.4595, lng: 77.0266 },
+    { name: "Connaught Place",        lat: 28.6315, lng: 77.2167 },
+    { name: "Noida Sector 18",        lat: 28.5708, lng: 77.3260 },
+    { name: "Faridabad Hub",          lat: 28.4089, lng: 77.3178 },
+    { name: "Dwarka",                 lat: 28.5921, lng: 77.0460 },
+    { name: "Ghaziabad",              lat: 28.6692, lng: 77.4538 },
+  ],
+  "MANHATTAN · 8": [
+    { name: "Depot · DUMBO",          lat: 40.7033, lng: -73.9881 },
+    { name: "Wall Street",            lat: 40.7074, lng: -74.0113 },
+    { name: "SoHo",                   lat: 40.7233, lng: -74.0030 },
+    { name: "Times Square",           lat: 40.7580, lng: -73.9855 },
+    { name: "Central Park",           lat: 40.7829, lng: -73.9654 },
+    { name: "UN Plaza",               lat: 40.7489, lng: -73.9680 },
+    { name: "Chelsea",                lat: 40.7466, lng: -74.0011 },
+    { name: "Harlem",                 lat: 40.8116, lng: -73.9465 },
+  ],
+  "BENGALURU · 7": [
+    { name: "Depot · Whitefield",     lat: 12.9698, lng: 77.7500 },
+    { name: "MG Road",                lat: 12.9759, lng: 77.6063 },
+    { name: "Indiranagar",            lat: 12.9784, lng: 77.6408 },
+    { name: "Koramangala",            lat: 12.9352, lng: 77.6245 },
+    { name: "Electronic City",        lat: 12.8452, lng: 77.6602 },
+    { name: "HSR Layout",             lat: 12.9116, lng: 77.6473 },
+    { name: "Hebbal",                 lat: 13.0354, lng: 77.5970 },
+  ],
+  "LONDON · 8": [
+    { name: "Depot · Canary Wharf",   lat: 51.5054, lng: -0.0235 },
+    { name: "King's Cross",           lat: 51.5308, lng: -0.1238 },
+    { name: "Westminster",            lat: 51.4995, lng: -0.1248 },
+    { name: "Tower Bridge",           lat: 51.5055, lng: -0.0754 },
+    { name: "Shoreditch",             lat: 51.5237, lng: -0.0782 },
+    { name: "Camden",                 lat: 51.5390, lng: -0.1426 },
+    { name: "Greenwich",              lat: 51.4826, lng: -0.0077 },
+    { name: "Kensington",             lat: 51.4988, lng: -0.1749 },
+  ],
+  "RANDOM · 10": null,
+};
+
 // ─────────────────────────── Held-Karp DP visual snippet ───────────────────────────
 const SOLVER_SNIPPET = `// HELD–KARP · O(n² · 2ⁿ)
 dp[1<<0][0] = 0;
@@ -61,8 +107,9 @@ for (mask = 1; mask < 1<<n; ++mask)
 
 // ─────────────────────────── App ───────────────────────────
 function App() {
+  const [workspace, setWorkspace] = useState("canvas"); // canvas | map
   const [locations, setLocations] = useState([]);
-  const [mode, setMode] = useState("grid"); // grid | manual
+  const [mode, setMode] = useState("grid"); // grid | manual (canvas mode only)
   const [optimizedPath, setOptimizedPath] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -71,6 +118,8 @@ function App() {
   const [manualName, setManualName] = useState("");
   const [manualX, setManualX] = useState("");
   const [manualY, setManualY] = useState("");
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
 
   const canvasWrapperRef = useRef(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -102,18 +151,34 @@ function App() {
     setTimeout(() => setError(null), 3500);
   };
 
-  const addLocation = useCallback((x, y, customName = null) => {
-    setLocations((prev) => {
-      if (prev.length >= 15) {
-        showError("Max 15 locations · Held-Karp is NP-hard exact");
-        return prev;
-      }
-      const idx = prev.length;
-      const name = customName || (idx === 0 ? "Depot" : `Stop ${ALPHABET[idx - 1]}`);
-      setOptimizedPath(null);
-      return [...prev, { x, y, name, index: idx }];
-    });
-  }, []);
+  // Reset the canvas/map when switching workspaces (data isn't compatible across modes)
+  useEffect(() => {
+    setLocations([]);
+    setOptimizedPath(null);
+    setError(null);
+    if (workspace === "map") setMode("grid"); // map only has click-to-drop or manual lat/lng
+  }, [workspace]);
+
+  const addLocation = useCallback(
+    (a, b, customName = null) => {
+      // a, b mean (x, y) for canvas, (lat, lng) for map
+      setLocations((prev) => {
+        if (prev.length >= 15) {
+          showError("Max 15 locations · Held-Karp is NP-hard exact");
+          return prev;
+        }
+        const idx = prev.length;
+        const name =
+          customName || (idx === 0 ? "Depot" : `Stop ${ALPHABET[idx - 1]}`);
+        setOptimizedPath(null);
+        if (workspace === "map") {
+          return [...prev, { lat: a, lng: b, name, index: idx }];
+        }
+        return [...prev, { x: a, y: b, name, index: idx }];
+      });
+    },
+    [workspace]
+  );
 
   const removeLocation = (idx) => {
     setLocations((prev) =>
@@ -135,6 +200,26 @@ function App() {
   };
 
   const loadPreset = (key) => {
+    if (workspace === "map") {
+      let data = MAP_PRESETS[key];
+      if (!data) {
+        // RANDOM · 10 — random points in a US-spanning bbox
+        data = [];
+        const cx = 39.5, cy = -98.35; // continental US center-ish
+        for (let i = 0; i < 10; i++) {
+          data.push({
+            name: i === 0 ? "Depot · Origin" : `Stop ${ALPHABET[i - 1]}`,
+            lat: cx + (Math.random() - 0.5) * 14,
+            lng: cy + (Math.random() - 0.5) * 40,
+          });
+        }
+      }
+      setLocations(data.map((d, i) => ({ ...d, index: i })));
+      setOptimizedPath(null);
+      setError(null);
+      return;
+    }
+
     let data = PRESETS[key];
     if (!data) {
       // RANDOM · 10
@@ -179,6 +264,23 @@ function App() {
   };
 
   const onAddManual = () => {
+    if (workspace === "map") {
+      const lat = parseFloat(manualLat);
+      const lng = parseFloat(manualLng);
+      if (Number.isNaN(lat) || Number.isNaN(lng)) {
+        showError("Enter valid latitude and longitude");
+        return;
+      }
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        showError("Lat must be in [-90, 90], Lng in [-180, 180]");
+        return;
+      }
+      addLocation(lat, lng, manualName.trim() || null);
+      setManualName("");
+      setManualLat("");
+      setManualLng("");
+      return;
+    }
     const x = parseFloat(manualX);
     const y = parseFloat(manualY);
     if (Number.isNaN(x) || Number.isNaN(y)) {
@@ -200,10 +302,26 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const payload = {
-        mode: "euclidean",
-        locations: locations.map((l) => ({ x: l.x, y: l.y, name: l.name })),
-      };
+      const payload =
+        workspace === "map"
+          ? {
+              mode: "haversine",
+              locations: locations.map((l) => ({
+                x: 0,
+                y: 0,
+                lat: l.lat,
+                lng: l.lng,
+                name: l.name,
+              })),
+            }
+          : {
+              mode: "euclidean",
+              locations: locations.map((l) => ({
+                x: l.x,
+                y: l.y,
+                name: l.name,
+              })),
+            };
       const { data } = await axios.post(`${API}/optimize`, payload);
       setOptimizedPath(data);
     } catch (err) {
@@ -261,7 +379,7 @@ function App() {
           {mode === "manual" && (
             <div className="px-5 pb-5">
               <div className="border border-[#27272A] bg-[#050505] p-4">
-                <Label>Add Location</Label>
+                <Label>{workspace === "map" ? "Add Location · LAT/LNG" : "Add Location"}</Label>
                 <input
                   data-testid="manual-name-input"
                   value={manualName}
@@ -270,22 +388,47 @@ function App() {
                   className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700 mb-2"
                 />
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <input
-                    data-testid="manual-x-input"
-                    value={manualX}
-                    onChange={(e) => setManualX(e.target.value)}
-                    placeholder="X"
-                    type="number"
-                    className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
-                  />
-                  <input
-                    data-testid="manual-y-input"
-                    value={manualY}
-                    onChange={(e) => setManualY(e.target.value)}
-                    placeholder="Y"
-                    type="number"
-                    className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
-                  />
+                  {workspace === "map" ? (
+                    <>
+                      <input
+                        data-testid="manual-lat-input"
+                        value={manualLat}
+                        onChange={(e) => setManualLat(e.target.value)}
+                        placeholder="Lat"
+                        type="number"
+                        step="0.0001"
+                        className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
+                      />
+                      <input
+                        data-testid="manual-lng-input"
+                        value={manualLng}
+                        onChange={(e) => setManualLng(e.target.value)}
+                        placeholder="Lng"
+                        type="number"
+                        step="0.0001"
+                        className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        data-testid="manual-x-input"
+                        value={manualX}
+                        onChange={(e) => setManualX(e.target.value)}
+                        placeholder="X"
+                        type="number"
+                        className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
+                      />
+                      <input
+                        data-testid="manual-y-input"
+                        value={manualY}
+                        onChange={(e) => setManualY(e.target.value)}
+                        placeholder="Y"
+                        type="number"
+                        className="w-full bg-[#0F0F11] border border-[#27272A] focus:border-[#FDE047] px-3 py-2 text-sm font-mono placeholder:text-neutral-700"
+                      />
+                    </>
+                  )}
                 </div>
                 <button
                   data-testid="add-manual-location-btn"
@@ -301,9 +444,9 @@ function App() {
 
           <Divider />
 
-          <SectionHeader index="02" title="Presets" subtitle="Hydrate the canvas instantly" />
+          <SectionHeader index="02" title="Presets" subtitle={workspace === "map" ? "Real cities · lat/lng" : "Hydrate the canvas instantly"} />
           <div className="px-5 pb-5 flex flex-col gap-2">
-            {Object.keys(PRESETS).map((k) => (
+            {Object.keys(workspace === "map" ? MAP_PRESETS : PRESETS).map((k) => (
               <button
                 key={k}
                 data-testid={`preset-${k.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
@@ -363,58 +506,123 @@ function App() {
           {/* canvas toolbar */}
           <div className="h-11 border-b border-[#27272A] flex items-center px-5 gap-4 bg-[#0F0F11] shrink-0">
             <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-neutral-400">
-              <Compass width={14} height={14} strokeWidth={1.6} className="text-[#FDE047]" />
-              CANVAS · WORLD-SPACE
+              {workspace === "map" ? (
+                <>
+                  <Globe width={14} height={14} strokeWidth={1.6} className="text-[#FDE047]" />
+                  WORLD MAP · LAT/LNG · HAVERSINE
+                </>
+              ) : (
+                <>
+                  <Compass width={14} height={14} strokeWidth={1.6} className="text-[#FDE047]" />
+                  CANVAS · WORLD-SPACE
+                </>
+              )}
             </div>
             <div className="flex-1" />
-            <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-neutral-500">
-              {size.w} × {size.h} px
-            </span>
+            {/* Workspace toggle pill */}
+            <div className="flex items-stretch border border-[#27272A] bg-[#050505]" data-testid="workspace-toggle">
+              <button
+                data-testid="workspace-canvas-btn"
+                onClick={() => setWorkspace("canvas")}
+                className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5 ${
+                  workspace === "canvas"
+                    ? "bg-white text-black"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                <ViewGrid width={12} height={12} strokeWidth={1.8} /> Canvas
+              </button>
+              <button
+                data-testid="workspace-map-btn"
+                onClick={() => setWorkspace("map")}
+                className={`px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5 ${
+                  workspace === "map"
+                    ? "bg-[#FDE047] text-black"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                <Globe width={12} height={12} strokeWidth={1.8} /> World Map
+              </button>
+            </div>
             <span className="h-3 w-px bg-[#27272A]" />
             <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-neutral-500">
-              {mode === "grid" ? "CLICK ANYWHERE TO DROP" : "MANUAL ENTRY MODE"}
+              {workspace === "map"
+                ? mode === "manual"
+                  ? "MANUAL LAT/LNG"
+                  : "CLICK MAP TO DROP"
+                : mode === "grid"
+                ? "CLICK ANYWHERE TO DROP"
+                : "MANUAL ENTRY MODE"}
             </span>
           </div>
 
           <div
             ref={canvasWrapperRef}
-            onClick={onCanvasClick}
-            className={`relative flex-1 dot-grid ${mode === "grid" ? "cursor-crosshair" : "cursor-default"}`}
+            onClick={workspace === "canvas" ? onCanvasClick : undefined}
+            className={`relative flex-1 ${
+              workspace === "canvas"
+                ? `dot-grid ${mode === "grid" ? "cursor-crosshair" : "cursor-default"}`
+                : "bg-[#0A0A0C]"
+            }`}
             data-testid="route-canvas"
           >
-            {/* Crosshair frame markers */}
-            <CornerMarks />
+            {workspace === "map" ? (
+              <>
+                <MapView
+                  locations={locations}
+                  optimizedPath={optimizedPath}
+                  onAdd={(lat, lng) => addLocation(lat, lng, null)}
+                  onHover={setHoveredIdx}
+                  hoveredIdx={hoveredIdx}
+                  enableClick={mode === "grid"}
+                />
+                {locations.length === 0 && <MapEmptyHint />}
+                <AlgorithmFloatingCard
+                  n={locations.length}
+                  states={dpStates}
+                  subs={subproblems}
+                  elapsed={optimizedPath?.elapsed_ms}
+                  cost={optimizedPath?.total_cost}
+                  unit="km"
+                />
+              </>
+            ) : (
+              <>
+                {/* Crosshair frame markers */}
+                <CornerMarks />
 
-            {/* SVG Routes */}
-            <RouteSVG
-              locations={locations}
-              optimizedPath={optimizedPath}
-              hoveredIdx={hoveredIdx}
-              size={size}
-            />
+                {/* SVG Routes */}
+                <RouteSVG
+                  locations={locations}
+                  optimizedPath={optimizedPath}
+                  hoveredIdx={hoveredIdx}
+                  size={size}
+                />
 
-            {/* Nodes (DOM, on top of SVG) */}
-            {locations.map((loc, i) => (
-              <NodeMarker
-                key={i}
-                idx={i}
-                loc={loc}
-                onHover={setHoveredIdx}
-                hovered={hoveredIdx === i}
-              />
-            ))}
+                {/* Nodes (DOM, on top of SVG) */}
+                {locations.map((loc, i) => (
+                  <NodeMarker
+                    key={i}
+                    idx={i}
+                    loc={loc}
+                    onHover={setHoveredIdx}
+                    hovered={hoveredIdx === i}
+                  />
+                ))}
 
-            {/* Empty state */}
-            {locations.length === 0 && <CanvasEmptyState mode={mode} />}
+                {/* Empty state */}
+                {locations.length === 0 && <CanvasEmptyState mode={mode} />}
 
-            {/* Floating algorithm card */}
-            <AlgorithmFloatingCard
-              n={locations.length}
-              states={dpStates}
-              subs={subproblems}
-              elapsed={optimizedPath?.elapsed_ms}
-              cost={optimizedPath?.total_cost}
-            />
+                {/* Floating algorithm card */}
+                <AlgorithmFloatingCard
+                  n={locations.length}
+                  states={dpStates}
+                  subs={subproblems}
+                  elapsed={optimizedPath?.elapsed_ms}
+                  cost={optimizedPath?.total_cost}
+                />
+              </>
+            )}
           </div>
 
           {/* Bottom action bar */}
@@ -451,7 +659,13 @@ function App() {
             <span className="h-6 w-px bg-[#27272A]" />
             <Stat
               label="Optimal Cost"
-              value={optimizedPath ? optimizedPath.total_cost.toFixed(2) : "—"}
+              value={
+                optimizedPath
+                  ? `${optimizedPath.total_cost.toFixed(2)}${
+                      workspace === "map" ? " km" : ""
+                    }`
+                  : "—"
+              }
               mono
               accent={!!optimizedPath}
             />
@@ -502,7 +716,7 @@ function App() {
           />
           <div className="px-5 pb-8">
             {optimizedPath ? (
-              <RouteLedger data={optimizedPath} locations={locations} />
+              <RouteLedger data={optimizedPath} locations={locations} unit={workspace === "map" ? "km" : ""} />
             ) : (
               <div className="border border-dashed border-[#27272A] p-5 text-[11px] text-neutral-500 leading-relaxed">
                 Add at least <span className="font-mono text-white">2</span> nodes
@@ -520,6 +734,7 @@ function App() {
         cost={optimizedPath?.total_cost}
         cppHealth={solverHealth}
         loading={loading}
+        workspace={workspace}
       />
 
       {/* Error toast */}
@@ -665,6 +880,10 @@ function ModeButton({ active, onClick, icon, label, hint, testid }) {
 
 function NodeRow({ idx, loc, onRemove, onHover }) {
   const isDepot = idx === 0;
+  const coordText =
+    typeof loc.lat === "number"
+      ? `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`
+      : `x:${Math.round(loc.x)} · y:${Math.round(loc.y)}`;
   return (
     <div
       onMouseEnter={() => onHover(idx)}
@@ -684,7 +903,7 @@ function NodeRow({ idx, loc, onRemove, onHover }) {
       <div className="flex-1 min-w-0">
         <div className="text-[12px] truncate font-medium">{loc.name}</div>
         <div className="text-[10px] font-mono text-neutral-500 mt-0.5">
-          x:{Math.round(loc.x)} · y:{Math.round(loc.y)}
+          {coordText}
         </div>
       </div>
       <button
@@ -826,6 +1045,23 @@ function CornerMarks() {
       <div className={`${markStyle} bottom-3 left-3 border-b border-l`} />
       <div className={`${markStyle} bottom-3 right-3 border-b border-r`} />
     </>
+  );
+}
+
+function MapEmptyHint() {
+  return (
+    <div className="absolute top-4 left-4 z-30 max-w-[300px] bg-black/85 backdrop-blur-md border border-[#27272A] p-4 pointer-events-none">
+      <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#FDE047] mb-2">
+        // CLICK ANY POINT ON THE MAP
+      </div>
+      <div className="font-display font-black text-[18px] tracking-[-0.03em] leading-tight text-white">
+        First click drops the <span className="text-[#FDE047]">depot</span>.
+        <br />Then drop your <span className="text-neutral-400">delivery stops</span>.
+      </div>
+      <p className="font-mono text-[10px] text-neutral-500 mt-3 leading-relaxed">
+        Distances use the Haversine formula on real lat/lng — same Held-Karp DP, world-scale.
+      </p>
+    </div>
   );
 }
 
@@ -976,7 +1212,7 @@ function RouteSVG({ locations, optimizedPath, hoveredIdx, size }) {
   );
 }
 
-function AlgorithmFloatingCard({ n, states, subs, elapsed, cost }) {
+function AlgorithmFloatingCard({ n, states, subs, elapsed, cost, unit }) {
   return (
     <div
       className="absolute top-4 right-4 z-30 bg-black/85 backdrop-blur-md border border-[#27272A] w-[260px]"
@@ -1002,7 +1238,7 @@ function AlgorithmFloatingCard({ n, states, subs, elapsed, cost }) {
         />
         <KV
           k="COST"
-          v={cost != null ? cost.toFixed(2) : "—"}
+          v={cost != null ? `${cost.toFixed(2)}${unit ? " " + unit : ""}` : "—"}
           accent={!!cost}
         />
       </div>
@@ -1104,8 +1340,9 @@ function SolverCard({ cppHealth, n, states, subs, elapsed }) {
   );
 }
 
-function RouteLedger({ data, locations }) {
+function RouteLedger({ data, locations, unit }) {
   const path = data.path_indices;
+  const u = unit || "";
   return (
     <div className="border border-[#27272A] bg-[#050505]">
       {/* header */}
@@ -1114,7 +1351,7 @@ function RouteLedger({ data, locations }) {
           OPTIMAL TOUR
         </span>
         <span className="font-mono text-[10px] text-neutral-500">
-          Σ = <span className="text-[#FDE047]">{data.total_cost.toFixed(2)}</span>
+          Σ = <span className="text-[#FDE047]">{data.total_cost.toFixed(2)}{u && ` ${u}`}</span>
         </span>
       </div>
       <div>
@@ -1154,7 +1391,7 @@ function RouteLedger({ data, locations }) {
                     edge → next
                   </span>
                   <span className="text-[10px] font-mono text-[#FDE047]">
-                    Δ {seg.distance.toFixed(2)}
+                    Δ {seg.distance.toFixed(2)}{u && ` ${u}`}
                   </span>
                 </div>
               )}
@@ -1166,14 +1403,16 @@ function RouteLedger({ data, locations }) {
   );
 }
 
-function BottomStatus({ n, cost, cppHealth, loading }) {
+function BottomStatus({ n, cost, cppHealth, loading, workspace }) {
+  const isMap = workspace === "map";
   const items = [
     { k: "SVC", v: "ROUTEIQ", color: "#FDE047" },
     { k: "ALGO", v: "HELD-KARP" },
     { k: "ENGINE", v: cppHealth === "available" ? "C++ READY" : (cppHealth || "BOOT").toUpperCase(), color: cppHealth === "available" ? "#22C55E" : "#EF4444" },
+    { k: "WORKSPACE", v: isMap ? "WORLD MAP" : "CANVAS", color: isMap ? "#FDE047" : null },
     { k: "NODES", v: String(n).padStart(2, "0") },
-    { k: "MODE", v: "EUCLIDEAN" },
-    { k: "STATE", v: loading ? "COMPUTING…" : cost != null ? `OPTIMAL Σ=${cost.toFixed(2)}` : "IDLE", color: cost != null ? "#FDE047" : null },
+    { k: "MODE", v: isMap ? "HAVERSINE · KM" : "EUCLIDEAN" },
+    { k: "STATE", v: loading ? "COMPUTING…" : cost != null ? `OPTIMAL Σ=${cost.toFixed(2)}${isMap ? "km" : ""}` : "IDLE", color: cost != null ? "#FDE047" : null },
   ];
   return (
     <div

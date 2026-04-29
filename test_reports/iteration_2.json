@@ -1,0 +1,40 @@
+{
+  "summary": "End-to-end testing of new Map workspace (Leaflet + haversine). Backend: 10/10 pytest cases pass including new Manhattan-8 haversine test that returns ~27.69km. Frontend: All map features verified — workspace toggle, World Map toolbar/status, 5 real-city presets (Delhi/Manhattan/Bengaluru/London/Random), Manhattan preset auto-fits map and yields OPTIMAL Σ=27.69km in 2.79ms with per-edge km tooltips (5.35km, 7.20km, 3.57km, etc.), ledger shows formatted lat/lng (40.7033, -73.9881), manual LAT/LNG inputs work, out-of-range lat shows toast 'Lat must be in [-90, 90], Lng in [-180, 180]', canvas regression flow still works. ONE CRITICAL BUG FOUND: switching Canvas→Map workspace while canvas has locations crashes MapView with 'Cannot read properties of undefined (reading toFixed)' because the workspace useEffect that clears locations runs AFTER the first render of MapView with old canvas (x/y) locations; MapView's Marker tooltip calls loc.lat.toFixed(4) on undefined.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MapView.js",
+        "issue": "Switching Canvas→Map with existing canvas locations crashes the entire app with 'Uncaught runtime errors: Cannot read properties of undefined (reading toFixed)'. Root cause: setWorkspace('map') triggers re-render BEFORE the useEffect that clears locations runs. MapView receives canvas-shaped locations (x/y, no lat/lng) and crashes on `loc.lat.toFixed(4)` in the Marker Tooltip (MapView.js line ~226) and on `position={[loc.lat, loc.lng]}`.",
+        "selector": "[data-testid='workspace-map-btn']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_routeiq_api.py",
+    "/app/test_reports/pytest/iter2.xml"
+  ],
+  "action_items": [
+    "Fix Canvas→Map crash. Two viable approaches: (a) In App.js loadPreset/workspace handler, do `setWorkspace('map'); setLocations([]); setOptimizedPath(null);` synchronously instead of relying on the useEffect on workspace change, OR (b) In MapView.js, filter `locations` to only those with `typeof loc.lat === 'number' && typeof loc.lng === 'number'` before rendering Markers and Polylines (defensive guard). Recommend (b) as it's more robust.",
+    "Optional: also guard the raw-graph polyline render and the segments render (a.lat / a.lng) against undefined."
+  ],
+  "critical_code_review_comments": [
+    "MapView.js: Marker render assumes every loc has numeric lat/lng. With React's deferred effect ordering, this is unsafe across workspace transitions. Add a filter or early return.",
+    "App.js useEffect on `[workspace]` clears locations asynchronously — any consumer that mounts on the same render with the old data must defensively guard. Better: clear locations in the click handler that triggers the workspace switch.",
+    "App.js still ~1440 lines — could be split into smaller modules.",
+    "Backend logger defined at line 211 but referenced at line 189 inside optimize() — works only because Python module loads fully before any request handler is invoked. Consider moving logging.basicConfig + logger to top of file."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_routeiq_api.py (added test_optimize_haversine_manhattan_8)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "92% — 1 critical UI crash on canvas→map transition; all other map flows work"},
+  "test_credentials": "N/A — no auth in app",
+  "seed_data_creation": "MongoDB optimization history populated organically by running optimize calls during testing.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend is fully green (10/10). Map workspace works perfectly when entered fresh (no prior canvas data). The crash is reproducible by: 1) Load any canvas preset (e.g., MANHATTAN · 8 in canvas mode), 2) Click 'World Map' button. The Uncaught runtime error overlay appears immediately. After main agent's fix, retest this specific transition path. All other flows (fresh map preset → optimize → manual lat/lng → error toast → switch back to canvas) verified working.",
+  "rca of the issue": "React state updates inside a useEffect run AFTER render, so when setWorkspace('map') triggers a re-render, the App renders the MapView component with the still-current `locations` array (which holds canvas {x,y} entries lacking lat/lng). MapView.js renders <Marker position={[loc.lat, loc.lng]} /> with loc.lat=undefined and inside the Tooltip calls `loc.lat.toFixed(4)` which throws TypeError. The useEffect clearing `locations` only runs on the next tick, but by then React has already crashed the component tree. Fix: either clear synchronously in the onClick handler, or add a `locations.filter(l => typeof l.lat === 'number' && typeof l.lng === 'number')` guard inside MapView before mapping over markers/polylines."
+}

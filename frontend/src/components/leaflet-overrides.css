@@ -1,0 +1,48 @@
+/* Make Leaflet popups / tooltips match the swiss high-contrast aesthetic */
+.routeiq-leaflet-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-container {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: #0A0A0C !important;
+}
+
+/* Tooltip style */
+.routeiq-tooltip,
+.routeiq-edge-tooltip {
+  background: #050505 !important;
+  border: 1px solid #27272A !important;
+  border-radius: 0 !important;
+  color: #FFFFFF !important;
+  padding: 6px 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+
+.routeiq-edge-tooltip {
+  color: #FDE047 !important;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px !important;
+}
+
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+  border: none !important;
+}
+
+/* Hide default attribution link styling but still show tiny credit */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+/* Zoom-out map cursor when click-to-drop enabled */
+.leaflet-container.routeiq-add-mode {
+  cursor: crosshair !important;
+}
