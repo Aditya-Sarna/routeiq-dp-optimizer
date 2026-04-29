@@ -377,14 +377,20 @@ async def compare(req: CompareRequest):
             if optimum is None or r["total_cost"] < optimum:
                 optimum = r["total_cost"]
 
-    # Tag each run with optimality gap
+    # Tag each run with optimality gap (use a tolerance to absorb the
+    # C++ binary's 2-decimal cost printout vs Python's full-precision cost)
+    tol = max(1e-3, abs(optimum) * 1e-4) if optimum is not None else 1e-6
     for r in runs:
         if r.get("error") or optimum is None or r["total_cost"] is None:
             r["gap_pct"] = None
             r["is_optimal"] = None
         else:
-            r["gap_pct"] = round(((r["total_cost"] - optimum) / optimum) * 100.0, 3) if optimum > 0 else 0.0
-            r["is_optimal"] = abs(r["total_cost"] - optimum) < 1e-6
+            diff = r["total_cost"] - optimum
+            r["is_optimal"] = abs(diff) <= tol
+            if r["is_optimal"]:
+                r["gap_pct"] = 0.0
+            else:
+                r["gap_pct"] = round((diff / optimum) * 100.0, 3) if optimum > 0 else 0.0
 
     return {
         "n_locations": n,

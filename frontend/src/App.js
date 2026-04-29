@@ -810,6 +810,8 @@ function App() {
         cppHealth={solverHealth}
         loading={loading}
         workspace={workspace}
+        algo={optimizedPath?.algorithm}
+        algoMeta={optimizedPath?.algorithm_meta}
       />
 
       {/* Error toast */}
@@ -1757,11 +1759,12 @@ function RouteLedger({ data, locations, unit }) {
   );
 }
 
-function BottomStatus({ n, cost, cppHealth, loading, workspace }) {
+function BottomStatus({ n, cost, cppHealth, loading, workspace, algo, algoMeta }) {
   const isMap = workspace === "map";
+  const algoLabel = algoMeta?.label?.toUpperCase() || (algo ? algo.toUpperCase() : "HELD-KARP");
   const items = [
     { k: "SVC", v: "ROUTEIQ", color: "#FDE047" },
-    { k: "ALGO", v: "HELD-KARP" },
+    { k: "ALGO", v: algoLabel, color: algo ? "#FDE047" : null },
     { k: "ENGINE", v: cppHealth === "available" ? "C++ READY" : (cppHealth || "BOOT").toUpperCase(), color: cppHealth === "available" ? "#22C55E" : "#EF4444" },
     { k: "WORKSPACE", v: isMap ? "WORLD MAP" : "CANVAS", color: isMap ? "#FDE047" : null },
     { k: "NODES", v: String(n).padStart(2, "0") },
