@@ -1,0 +1,137 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) - Dark Variant",
+  "typography": {
+    "headings": {
+      "family": "Chivo",
+      "weights": ["300", "900"],
+      "usage": "Use 900 for main titles, 300 for elegant contrast in subtitles"
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "weights": ["400", "500", "600"],
+      "usage": "Standard UI text, forms, list items, buttons"
+    },
+    "monospace": {
+      "family": "JetBrains Mono",
+      "weights": ["400", "700"],
+      "usage": "Coordinates, algorithmic complexity O(n²·2ⁿ), DP states, distances, status logs, terminal outputs"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h4": "text-sm uppercase tracking-[0.2em] font-bold",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "mono_small": "text-xs font-mono tracking-tight"
+    }
+  },
+  "colors": {
+    "background": {
+      "main": "#050505",
+      "surface": "#0F0F11",
+      "surface_raised": "#18181B",
+      "canvas": "#0A0A0C"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "tertiary": "#71717A",
+      "inverse": "#000000"
+    },
+    "border": {
+      "subtle": "#27272A",
+      "focus": "#FDE047"
+    },
+    "accent": {
+      "primary": "#FDE047",
+      "primary_hover": "#FEF08A",
+      "danger": "#EF4444",
+      "success": "#22C55E",
+      "route_line": "#FDE047",
+      "depot_node": "#FFFFFF",
+      "delivery_node": "#A1A1AA"
+    },
+    "rules": [
+      "95% of the UI must be strictly monochrome (Black, Grey, White).",
+      "Use Warning Yellow (#FDE047) EXCLUSIVELY for the computed optimal route, active CTAs, and pulsing depot.",
+      "Never use gradients for surfaces; rely on 1px solid borders (#27272A) and pure flat colors."
+    ]
+  },
+  "layout": {
+    "spacing": "Dense, technical spacing. p-4 to p-6 inside panels. gap-4 between dense data rows.",
+    "grid_strategy": "Control Room Grid (Mode B). The application is a literal dashboard. Strict grid hierarchy.",
+    "bento_spans": {
+      "sidebar": "col-span-1 lg:col-span-3 border-r border-[#27272A] h-[calc(100vh-64px)] overflow-y-auto bg-[#0F0F11]",
+      "canvas": "col-span-1 lg:col-span-9 relative h-full bg-[#0A0A0C] bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:24px_24px]",
+      "bottom_status": "col-span-full h-16 border-t border-[#27272A] bg-[#050505] flex items-center px-6"
+    }
+  },
+  "surfaces": {
+    "panels": "Flat Solid backgrounds (#0F0F11). 1px sharp inner border (border-white/10). No shadow. Sharp corners (rounded-none).",
+    "canvas": "Dark background with a technical dot-grid pattern. No borders inside the canvas area except the boundary.",
+    "floating_cards": "Glassmorphism for floating tooltips/metrics over the canvas: bg-black/80 backdrop-blur-xl border border-[#27272A] shadow-2xl rounded-none.",
+    "status_bar": "Terminal-like status bar at the bottom. bg-[#050505] border-t border-[#27272A]."
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-white text-black hover:bg-neutral-200 font-bold tracking-wide rounded-none px-6 py-3 transition-colors uppercase text-sm",
+      "accent": "bg-[#FDE047] text-black hover:bg-[#FEF08A] font-bold tracking-wide rounded-none px-6 py-3 transition-colors uppercase text-sm shadow-[0_0_15px_rgba(253,224,71,0.2)] hover:shadow-[0_0_20px_rgba(253,224,71,0.4)]",
+      "ghost": "bg-transparent text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-none border border-transparent hover:border-neutral-700 px-4 py-2 text-sm",
+      "danger": "bg-transparent text-[#EF4444] hover:bg-[#EF4444]/10 rounded-none border border-transparent hover:border-[#EF4444]/50 px-4 py-2 text-sm"
+    },
+    "inputs": {
+      "text": "bg-[#050505] border border-[#27272A] focus:border-[#FDE047] rounded-none text-white font-mono placeholder:text-neutral-600 focus:ring-1 focus:ring-[#FDE047] px-3 py-2",
+      "labels": "text-[10px] font-mono uppercase tracking-[0.1em] text-neutral-500 mb-1.5 block"
+    },
+    "canvas_elements": {
+      "depot": "w-5 h-5 bg-white rounded-none border-2 border-black flex items-center justify-center text-black font-bold text-[10px] shadow-[0_0_15px_rgba(255,255,255,0.5)] z-20",
+      "stop": "w-3 h-3 bg-neutral-800 rounded-none border border-neutral-400 hover:border-white hover:bg-neutral-600 transition-colors cursor-pointer z-10",
+      "route_line": "Stroke width 2px, Color #FDE047. Drop-shadow filter for glow: drop-shadow-[0_0_8px_rgba(253,224,71,0.5)].",
+      "distance_badge": "bg-[#050505] text-[#FDE047] font-mono text-[10px] px-1.5 py-0.5 border border-[#27272A] absolute translate-y-[-50%] translate-x-[-50%]"
+    },
+    "tabs": "border-b border-[#27272A] flex space-x-6. Active tab: text-white border-b-2 border-[#FDE047] pb-2 font-bold. Inactive: text-neutral-500 hover:text-neutral-300 pb-2 transition-colors",
+    "cards": "bg-[#0F0F11] border border-[#27272A] rounded-none p-4"
+  },
+  "motion": {
+    "route_drawing": "Use framer-motion to draw the SVG path. transition={{ duration: 1.5, ease: 'easeInOut' }} on pathLength from 0 to 1.",
+    "depot_pulse": "Continuous scale 1 to 1.1 and opacity 1 to 0.5 pulse on the depot marker using framer-motion repeat: Infinity.",
+    "panel_entrance": "Slide in from left/bottom with opacity fade. Staggered children for list items (delay 0.05s) for a data-cascading effect.",
+    "hover_states": "Instant background color change, no slow fading for a snappy, precise, technical feel."
+  },
+  "icons": {
+    "library": "iconoir-react",
+    "installation": "yarn add iconoir-react",
+    "usage": "Use crisp, thin-line icons (stroke-width: 1.5). Size 20px for standard, 16px for dense lists. Do not use generic solid icons."
+  },
+  "data_testing": {
+    "rule": "All interactive elements MUST include data-testid attributes.",
+    "examples": [
+      "data-testid='optimize-route-button'",
+      "data-testid='add-node-canvas'",
+      "data-testid='mode-toggle-grid'",
+      "data-testid='location-list-item'",
+      "data-testid='remove-node-button'",
+      "data-testid='clear-canvas-button'"
+    ]
+  },
+  "images": {
+    "strategy": "No raster images or stock photos should be used. Rely entirely on typography, SVG elements, CSS grids, and precise layout to achieve the technical algorithmic visualization aesthetic.",
+    "urls": []
+  },
+  "instructions_to_main_agent": [
+    "You are working with .js files, NOT .tsx files. Write all React components in modern ES6+ .jsx/.js syntax.",
+    "Strictly adhere to the 95% monochrome rule. Color is only for functional mapping (the route, the depot, active states).",
+    "Use pure HTML/Tailwind for the layout grid. Create a 12-column literal grid layout: sidebar (col-span-3) for algorithm metrics/list, canvas (col-span-9) for map.",
+    "For the canvas, use a dot-grid background using CSS radial-gradient (e.g., bg-[radial-gradient(#27272a_1px,transparent_1px)]).",
+    "Animate the route visualization using framer-motion SVG path drawing (<motion.path> with pathLength).",
+    "Data-heavy text (coordinates, distances, algorithm metrics like O(n²·2ⁿ), DP states) MUST use JetBrains Mono.",
+    "Headings MUST use Chivo (install via Google Fonts in index.html or import in CSS).",
+    "Body text MUST use IBM Plex Sans.",
+    "Build Shadcn components if needed, but strip their default rounded corners (force rounded-none) to match the Swiss Brutalist/Technical aesthetic.",
+    "Ensure the canvas is interactive (click to add nodes). Implement visual feedback when a node is added.",
+    "Display the route results in a dense, scannable format (like a terminal output or trading ledger) rather than fluffy cards.",
+    "Include a status bar at the bottom with solver health, node count, and contextual messages.",
+    "Ensure the Held-Karp exact DP algorithm logic (calling FastAPI) is properly integrated, handling loading states (O(n²·2ⁿ) takes time for n > 15)."
+  ]
+}
