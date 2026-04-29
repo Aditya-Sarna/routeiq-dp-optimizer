@@ -22,6 +22,7 @@ import {
   ViewGrid,
 } from "iconoir-react";
 import MapView from "./components/MapView";
+import GeocodeSearch from "./components/GeocodeSearch";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -578,6 +579,9 @@ function App() {
                   hoveredIdx={hoveredIdx}
                   enableClick={mode === "grid"}
                 />
+                <GeocodeSearch
+                  onSelect={({ lat, lng, name }) => addLocation(lat, lng, name)}
+                />
                 {locations.length === 0 && <MapEmptyHint />}
                 <AlgorithmFloatingCard
                   n={locations.length}
@@ -1052,13 +1056,12 @@ function CornerMarks() {
 
 function MapEmptyHint() {
   return (
-    <div className="absolute top-4 left-4 z-30 max-w-[300px] bg-black/85 backdrop-blur-md border border-[#27272A] p-4 pointer-events-none">
+    <div className="absolute bottom-4 left-4 z-30 max-w-[300px] bg-black/85 backdrop-blur-md border border-[#27272A] p-4 pointer-events-none">
       <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-[#FDE047] mb-2">
-        // CLICK ANY POINT ON THE MAP
+        // SEARCH · CLICK · OR LOAD A PRESET
       </div>
-      <div className="font-display font-black text-[18px] tracking-[-0.03em] leading-tight text-white">
-        First click drops the <span className="text-[#FDE047]">depot</span>.
-        <br />Then drop your <span className="text-neutral-400">delivery stops</span>.
+      <div className="font-display font-black text-[16px] tracking-[-0.03em] leading-tight text-white">
+        Type a place above (e.g. <span className="text-[#FDE047]">Bandra</span>, <span className="text-[#FDE047]">SoHo</span>) or click anywhere on the map. First pin = depot.
       </div>
       <p className="font-mono text-[10px] text-neutral-500 mt-3 leading-relaxed">
         Distances use the Haversine formula on real lat/lng — same Held-Karp DP, world-scale.

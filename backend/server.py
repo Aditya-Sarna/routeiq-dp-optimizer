@@ -3,7 +3,7 @@ RouteIQ — FastAPI backend that bridges the C++ Held-Karp DP TSP solver
 with the React frontend.
 """
 
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -15,6 +15,8 @@ import math
 import subprocess
 import logging
 import time
+import asyncio
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -195,6 +197,100 @@ async def optimize(req: OptimizeRequest):
 async def history(limit: int = 20):
     docs = await db.optimizations.find({}, {"_id": 0}).sort("_id", -1).to_list(limit)
     return docs
+
+
+# ─────────────────── Geocoder (Nominatim proxy) ───────────────────
+# Tiny in-memory cache + simple rate-limit guard. Nominatim's usage policy:
+#   - max 1 req/sec
+#   - identifying User-Agent required
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_UA = "RouteIQ/1.0 (held-karp-tsp-demo; contact via emergent.sh)"
+_geocode_cache: dict = {}
+_geocode_lock = asyncio.Lock()
+_geocode_last_call = {"t": 0.0}
+
+
+@api_router.get("/geocode")
+async def geocode(
+    q: str = Query(..., min_length=2, max_length=120, description="Place name to look up"),
+    limit: int = Query(6, ge=1, le=10),
+):
+    key = f"{q.strip().lower()}::{limit}"
+    if key in _geocode_cache:
+        return _geocode_cache[key]
+
+    # Throttle to ≤ 1 request / second across the whole process
+    async with _geocode_lock:
+        now = time.time()
+        wait = 1.05 - (now - _geocode_last_call["t"])
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _geocode_last_call["t"] = time.time()
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(
+                    NOMINATIM_URL,
+                    params={
+                        "q": q,
+                        "format": "jsonv2",
+                        "addressdetails": 1,
+                        "limit": limit,
+                    },
+                    headers={
+                        "User-Agent": NOMINATIM_UA,
+                        "Accept-Language": "en",
+                    },
+                )
+                r.raise_for_status()
+                data = r.json()
+        except httpx.HTTPError as e:
+            logger.warning(f"Nominatim error: {e}")
+            raise HTTPException(status_code=502, detail="Geocoder upstream error")
+
+    results = []
+    for item in data:
+        try:
+            lat = float(item.get("lat"))
+            lon = float(item.get("lon"))
+        except (TypeError, ValueError):
+            continue
+        addr = item.get("address") or {}
+        display_name = item.get("display_name", "") or ""
+        primary = item.get("name") or display_name.split(",")[0].strip()
+        # Build a concise "Place · Region · Country" label
+        region = (
+            addr.get("city")
+            or addr.get("town")
+            or addr.get("village")
+            or addr.get("suburb")
+            or addr.get("state")
+            or addr.get("county")
+            or ""
+        )
+        country = addr.get("country") or ""
+        short_parts = [primary]
+        if region and region.lower() != primary.lower():
+            short_parts.append(region)
+        if country:
+            short_parts.append(country)
+        results.append({
+            "name": primary[:60] or display_name[:60],
+            "label": " · ".join(short_parts)[:90],
+            "display_name": display_name,
+            "country": country,
+            "lat": lat,
+            "lng": lon,
+            "type": item.get("type") or item.get("class") or "place",
+            "importance": item.get("importance"),
+        })
+
+    payload = {"query": q, "results": results}
+    _geocode_cache[key] = payload
+    # Cap cache size
+    if len(_geocode_cache) > 500:
+        _geocode_cache.pop(next(iter(_geocode_cache)))
+    return payload
 
 
 app.include_router(api_router)
