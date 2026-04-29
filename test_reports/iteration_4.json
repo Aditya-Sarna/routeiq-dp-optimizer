@@ -1,0 +1,45 @@
+{
+  "summary": "End-to-end testing of new TSP algorithm features (held-karp / backtracking / greedy + /api/compare). Backend: 11 new pytest cases (TestAlgorithmsMeta, TestOptimizePerAlgorithm, TestCompare) added in /app/backend/tests/test_algorithms_compare.py — all 11 pass; combined regression of 22 backend tests (5 geocode tests skip due to outbound network restriction) all green. Frontend: Verified all 4 buttons (run-held-karp-btn, run-backtracking-btn, run-greedy-btn, compare-algorithms-btn) render with correct labels & complexity badges; all disabled when locations<2 then enabled after Manhattan-8 preset. Sequential runs: Greedy Σ=2240.78, Held-Karp Σ=2206.30, Backtracking Σ=2206.30 (greedy >= optimal ✓; held-karp == backtracking ✓). Compare modal opens, shows 3 cards with complexity/total cost/elapsed/optimality/space/engine/tour order, CHEAPEST badge on Held-Karp, FASTEST badge on Greedy, HEAD-TO-HEAD MATRIX table present, footer explains exact vs heuristic. Modal closes via X button AND via outside click. All required data-testids present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/compare", "issue": "Backtracking is reported as is_optimal=false with gap_pct=0.003% on tiny inputs (e.g. SAMPLE_5 euclidean → held-karp 46.67 vs backtracking 46.6712). Root cause: the C++ Held-Karp binary outputs cost with limited (≈2-decimal) precision, so the Python-computed backtracking cost is FP-greater than the C++ cost even though both are exact. Compare endpoint then flags backtracking sub-optimal and the Compare modal shows '+0.003%' instead of 'OPTIMAL'. Fix: in /api/compare, compare via abs(a-b) < epsilon (e.g. max(1e-3, optimum*1e-5)) instead of strict 1e-6, OR have the C++ binary emit cost with %.6f. Confirmed on Manhattan-8 the issue does not show up because cost magnitude is small."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Compare modal optimality badge", "issue": "Backtracking card sometimes shows '+0.00%' (yellow) instead of green 'OPTIMAL' badge because backend gap_pct is 0.003% > 0 (see backend minor issue). Cosmetic but misleading — backtracking IS exact.", "affected_selectors": ["[data-testid='compare-card-backtracking']"]}
+    ],
+    "design_issues": [
+      {"screen": "bottom-status-bar", "issues": ["Status bar shows static 'ALGO HELD-KARP · ENGINE C++' regardless of which algorithm was just run (greedy/backtracking still display 'HELD-KARP'). Consider making it reflect activeAlgo."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_algorithms_compare.py",
+    "/app/backend/tests/test_routeiq_api.py",
+    "/app/backend/tests/test_geocode_api.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [
+    "(MINOR/COSMETIC) Tighten /api/compare optimum tolerance OR increase C++ binary cost output precision so backtracking is correctly flagged is_optimal=true on small inputs.",
+    "(MINOR) Wire bottom-status-bar's ALGO label to activeAlgo state (currently hardcoded HELD-KARP)."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 386: gap_pct uses strict optimum comparison; tiny FP differences from C++ binary cause exact backtracking to be flagged sub-optimal. Use a tolerance.",
+    "server.py: solve_backtracking uses recursive DFS without iterative limit — for n=15 worst case factorial explosion; the existing branch-and-bound prune helps but a hard wall-clock timeout would be safer (currently no timeout at all on backtracking unlike C++ subprocess which has timeout=30).",
+    "server.py: solve_held_karp_via_cpp parses cost with float() but the C++ binary apparently truncates to 2 decimals — see issue above. Either way, segments are recomputed in Python so segment sum may differ from cost field by ~0.001.",
+    "App.js still ~1700+ lines — split into smaller modules (carry-over from iter2/3).",
+    "logger reference order issue from iter3 still not addressed (logger created near bottom of server.py at line 514 but used earlier at lines 313 and 455)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_algorithms_compare.py (new, 11 tests covering algorithms metadata, per-algorithm optimize, compare endpoint validation + correctness)"
+  ],
+  "success_rate": {"backend": "100% (22/22 active; 5 geocode skipped due to network)", "frontend": "100% on tested flows"},
+  "test_credentials": "N/A — no auth in app",
+  "seed_data_creation": "MongoDB optimizations history populated organically by algo runs during testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 algorithms work correctly end-to-end (held-karp via C++, backtracking + greedy in Python). Compare modal shows the required CHEAPEST/FASTEST badges + head-to-head matrix and closes both via X and outside-click. Only outstanding nit is the tiny FP gap between C++ Held-Karp cost (truncated precision) and Python backtracking cost — this causes backtracking to display '+0.00%' instead of 'OPTIMAL' on some euclidean inputs. Fix is one-liner in /api/compare. The 13+ location cap on /api/compare is enforced by Pydantic max_length=12 (returns 422). Frontend cap shows toast 'Compare is capped at 12 nodes' (verified by code inspection in App.js but not reproduced in browser due to data setup overhead).",
+  "rca of the issue": "C++ Held-Karp binary appears to output cost rounded/truncated (≈2-decimal). When /api/compare picks the minimum of held-karp vs backtracking as `optimum`, held-karp wins by a fraction (e.g. 46.67 < 46.6712). The is_optimal check then uses abs(cost - optimum) < 1e-6 which fails for backtracking. Mitigation: use a relative tolerance (e.g. < 1e-4 of optimum) when computing is_optimal; or fix the C++ binary to print cost with %.6f."
+}

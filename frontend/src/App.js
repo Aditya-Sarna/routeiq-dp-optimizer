@@ -20,6 +20,7 @@ import {
   Erase,
   Globe,
   ViewGrid,
+  GitCompare,
 } from "iconoir-react";
 import MapView from "./components/MapView";
 import GeocodeSearch from "./components/GeocodeSearch";
@@ -113,6 +114,10 @@ function App() {
   const [mode, setMode] = useState("grid"); // grid | manual (canvas mode only)
   const [optimizedPath, setOptimizedPath] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeAlgo, setActiveAlgo] = useState(null); // which algo button is loading
+  const [compareData, setCompareData] = useState(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [error, setError] = useState(null);
   const [solverHealth, setSolverHealth] = useState("unknown");
   const [hoveredIdx, setHoveredIdx] = useState(null);
@@ -300,15 +305,17 @@ function App() {
     setManualY("");
   };
 
-  const optimizeRoute = async () => {
+  const optimizeRoute = async (algorithm = "held-karp") => {
     if (locations.length < 2) return;
     setLoading(true);
+    setActiveAlgo(algorithm);
     setError(null);
     try {
       const payload =
         workspace === "map"
           ? {
               mode: "haversine",
+              algorithm,
               locations: locations.map((l) => ({
                 x: 0,
                 y: 0,
@@ -319,6 +326,7 @@ function App() {
             }
           : {
               mode: "euclidean",
+              algorithm,
               locations: locations.map((l) => ({
                 x: l.x,
                 y: l.y,
@@ -335,6 +343,39 @@ function App() {
       showError(typeof msg === "string" ? msg : "Optimization failed");
     } finally {
       setLoading(false);
+      setActiveAlgo(null);
+    }
+  };
+
+  const runCompare = async () => {
+    if (locations.length < 2) return;
+    if (locations.length > 12) {
+      showError("Compare is capped at 12 nodes (backtracking is O(n!))");
+      return;
+    }
+    setCompareLoading(true);
+    setError(null);
+    try {
+      const payload =
+        workspace === "map"
+          ? {
+              mode: "haversine",
+              locations: locations.map((l) => ({
+                x: 0, y: 0, lat: l.lat, lng: l.lng, name: l.name,
+              })),
+            }
+          : {
+              mode: "euclidean",
+              locations: locations.map((l) => ({ x: l.x, y: l.y, name: l.name })),
+            };
+      const { data } = await axios.post(`${API}/compare`, payload);
+      setCompareData(data);
+      setCompareOpen(true);
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "Compare failed";
+      showError(typeof msg === "string" ? msg : "Compare failed");
+    } finally {
+      setCompareLoading(false);
     }
   };
 
@@ -632,32 +673,60 @@ function App() {
           </div>
 
           {/* Bottom action bar */}
-          <div className="border-t border-[#27272A] bg-[#0F0F11] px-5 py-3 flex items-center gap-3 shrink-0">
-            <button
-              data-testid="optimize-route-button"
-              onClick={optimizeRoute}
+          <div className="border-t border-[#27272A] bg-[#0F0F11] px-5 py-3 flex items-center gap-2 shrink-0 flex-wrap">
+            <AlgoButton
+              testid="run-held-karp-btn"
+              label="HELD-KARP"
+              complexity="O(n²·2ⁿ)"
+              tone="accent"
+              loading={loading && activeAlgo === "held-karp"}
               disabled={!canOptimize}
-              className={`group relative px-6 py-3 font-bold uppercase tracking-[0.2em] text-[11px] flex items-center gap-3 transition-all
-                ${
-                  canOptimize
-                    ? "bg-[#FDE047] text-black hover:bg-[#FEF08A] shadow-[0_0_20px_rgba(253,224,71,0.25)] hover:shadow-[0_0_30px_rgba(253,224,71,0.45)]"
-                    : "bg-[#18181B] text-neutral-600 cursor-not-allowed"
-                }`}
+              onClick={() => optimizeRoute("held-karp")}
+              activeMatch={optimizedPath?.algorithm === "held-karp"}
+            />
+            <AlgoButton
+              testid="run-backtracking-btn"
+              label="BACKTRACKING"
+              complexity="O(n!)"
+              tone="white"
+              loading={loading && activeAlgo === "backtracking"}
+              disabled={!canOptimize}
+              onClick={() => optimizeRoute("backtracking")}
+              activeMatch={optimizedPath?.algorithm === "backtracking"}
+            />
+            <AlgoButton
+              testid="run-greedy-btn"
+              label="GREEDY · NN"
+              complexity="O(n²)"
+              tone="ghost"
+              loading={loading && activeAlgo === "greedy"}
+              disabled={!canOptimize}
+              onClick={() => optimizeRoute("greedy")}
+              activeMatch={optimizedPath?.algorithm === "greedy"}
+            />
+
+            <button
+              data-testid="compare-algorithms-btn"
+              onClick={runCompare}
+              disabled={!canOptimize || compareLoading || locations.length > 12}
+              className={`px-4 py-3 font-bold uppercase tracking-[0.2em] text-[11px] flex items-center gap-2 transition-colors ${
+                canOptimize && !compareLoading && locations.length <= 12
+                  ? "border border-[#27272A] text-neutral-300 hover:border-white hover:text-white"
+                  : "border border-[#27272A] text-neutral-700 cursor-not-allowed"
+              }`}
             >
-              {loading ? (
+              {compareLoading ? (
                 <>
-                  <Spinner /> COMPUTING DP TABLE…
+                  <Spinner /> COMPARING…
                 </>
               ) : (
                 <>
-                  <Flash width={14} height={14} strokeWidth={2.4} />
-                  {optimizedPath ? "RE-OPTIMIZE" : "RUN HELD-KARP"}
-                  <span className="font-mono opacity-70 normal-case tracking-tight ml-1">
-                    O(n²·2ⁿ)
-                  </span>
+                  <GitCompare width={12} height={12} strokeWidth={2.2} />
+                  COMPARE 3
                 </>
               )}
             </button>
+
             <div className="flex-1" />
             <Stat label="Nodes" value={locations.length} />
             <span className="h-6 w-px bg-[#27272A]" />
@@ -761,6 +830,17 @@ function App() {
             />
             <span className="font-mono text-xs text-[#FCA5A5]">{error}</span>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Compare modal */}
+      <AnimatePresence>
+        {compareOpen && compareData && (
+          <CompareModal
+            data={compareData}
+            unit={workspace === "map" ? "km" : ""}
+            onClose={() => setCompareOpen(false)}
+          />
         )}
       </AnimatePresence>
     </div>
@@ -1051,6 +1131,275 @@ function CornerMarks() {
       <div className={`${markStyle} bottom-3 left-3 border-b border-l`} />
       <div className={`${markStyle} bottom-3 right-3 border-b border-r`} />
     </>
+  );
+}
+
+function AlgoButton({ testid, label, complexity, tone, loading, disabled, onClick, activeMatch }) {
+  const base = "px-4 py-3 font-bold uppercase tracking-[0.16em] text-[10px] flex items-center gap-2 transition-all border";
+  let cls = "";
+  if (tone === "accent") {
+    cls = disabled
+      ? "bg-[#18181B] border-[#18181B] text-neutral-600 cursor-not-allowed"
+      : `bg-[#FDE047] border-[#FDE047] text-black hover:bg-[#FEF08A] ${
+          activeMatch ? "ring-2 ring-[#FDE047]/40" : ""
+        } shadow-[0_0_15px_rgba(253,224,71,0.18)]`;
+  } else if (tone === "white") {
+    cls = disabled
+      ? "bg-[#18181B] border-[#18181B] text-neutral-600 cursor-not-allowed"
+      : `bg-white border-white text-black hover:bg-neutral-200 ${
+          activeMatch ? "ring-2 ring-white/40" : ""
+        }`;
+  } else {
+    cls = disabled
+      ? "bg-transparent border-[#27272A] text-neutral-700 cursor-not-allowed"
+      : `bg-transparent border-[#27272A] text-neutral-300 hover:border-white hover:text-white ${
+          activeMatch ? "border-[#FDE047] text-[#FDE047]" : ""
+        }`;
+  }
+  return (
+    <button data-testid={testid} disabled={disabled} onClick={onClick} className={`${base} ${cls}`}>
+      {loading ? (
+        <>
+          <Spinner /> RUNNING…
+        </>
+      ) : (
+        <>
+          <Flash width={12} height={12} strokeWidth={2.4} />
+          {label}
+          <span className="font-mono opacity-70 normal-case tracking-tight">{complexity}</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+function CompareModal({ data, onClose, unit }) {
+  if (!data) return null;
+  const u = unit || "";
+  const runs = data.runs || [];
+  const fastest = runs
+    .filter((r) => r.elapsed_ms != null)
+    .reduce((a, b) => (a == null || b.elapsed_ms < a.elapsed_ms ? b : a), null);
+  const cheapest = runs
+    .filter((r) => r.total_cost != null)
+    .reduce((a, b) => (a == null || b.total_cost < a.total_cost ? b : a), null);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[500] bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
+      data-testid="compare-modal"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 24, scale: 0.98, opacity: 0 }}
+        animate={{ y: 0, scale: 1, opacity: 1 }}
+        exit={{ y: 24, scale: 0.98, opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[1100px] max-h-[88vh] overflow-y-auto bg-[#0A0A0C] border border-[#27272A]"
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-[#0F0F11] border-b border-[#27272A] px-6 py-4 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-mono text-[#FDE047] tracking-[0.24em] mb-1">/COMPARE</div>
+            <div className="font-display font-black text-[24px] tracking-tight">
+              Three TSP solvers · same input
+            </div>
+            <div className="text-[11px] font-mono uppercase tracking-[0.14em] text-neutral-500 mt-1">
+              N = <span className="text-white">{data.n_locations}</span> · MODE ={" "}
+              <span className="text-white">{(data.mode || "").toUpperCase()}</span>
+              {data.optimum_cost != null && (
+                <>
+                  {" "}· OPTIMUM ={" "}
+                  <span className="text-[#FDE047]">
+                    {data.optimum_cost.toFixed(2)}
+                    {u && ` ${u}`}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          <button
+            data-testid="compare-modal-close"
+            onClick={onClose}
+            className="border border-[#27272A] hover:border-white text-neutral-400 hover:text-white p-2 transition-colors"
+          >
+            <Xmark width={16} height={16} strokeWidth={1.8} />
+          </button>
+        </div>
+
+        {/* Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-[#27272A]">
+          {runs.map((r) => {
+            const isFastest = fastest && r.algorithm === fastest.algorithm;
+            const isCheapest = cheapest && r.algorithm === cheapest.algorithm;
+            return (
+              <div
+                key={r.algorithm}
+                data-testid={`compare-card-${r.algorithm}`}
+                className="bg-[#0A0A0C] p-5 flex flex-col"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500">
+                    {r.meta.optimal ? "EXACT" : "HEURISTIC"}
+                  </div>
+                  <div className="flex gap-1">
+                    {isFastest && r.elapsed_ms != null && (
+                      <span className="text-[9px] font-mono uppercase tracking-[0.18em] bg-[#FDE047] text-black px-1.5 py-0.5">
+                        FASTEST
+                      </span>
+                    )}
+                    {isCheapest && r.total_cost != null && (
+                      <span className="text-[9px] font-mono uppercase tracking-[0.18em] bg-white text-black px-1.5 py-0.5">
+                        CHEAPEST
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="font-display font-black text-[22px] tracking-tight leading-tight">
+                  {r.meta.label}
+                </div>
+                <div className="font-mono text-[11px] text-[#FDE047] mt-1">
+                  {r.meta.complexity}
+                </div>
+
+                {r.error ? (
+                  <div className="mt-4 p-3 border border-[#EF4444]/50 bg-[#EF4444]/5 text-[#FCA5A5] font-mono text-[11px]">
+                    {r.error}
+                  </div>
+                ) : (
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Metric
+                      label="Total Cost"
+                      value={`${r.total_cost.toFixed(2)}${u && " " + u}`}
+                      accent
+                    />
+                    <Metric
+                      label="Elapsed"
+                      value={`${r.elapsed_ms.toFixed(2)} ms`}
+                    />
+                    <Metric
+                      label="Optimality"
+                      value={
+                        r.is_optimal
+                          ? "OPTIMAL"
+                          : r.gap_pct != null
+                          ? `+${r.gap_pct.toFixed(2)}%`
+                          : "—"
+                      }
+                      tone={r.is_optimal ? "success" : "warn"}
+                    />
+                    <Metric label="Space" value={r.meta.space} />
+                  </div>
+                )}
+
+                <div className="mt-4 text-[10px] font-mono uppercase tracking-[0.16em] text-neutral-600">
+                  ENGINE · {r.meta.engine}
+                </div>
+
+                {!r.error && r.path_indices && (
+                  <div className="mt-4 border-t border-[#1A1A1D] pt-3">
+                    <div className="text-[9px] font-mono uppercase tracking-[0.2em] text-neutral-600 mb-2">
+                      TOUR ORDER
+                    </div>
+                    <div className="font-mono text-[11px] text-neutral-300 break-words">
+                      {r.path_indices.join(" → ")}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer matrix */}
+        <div className="bg-[#0F0F11] border-t border-[#27272A] px-6 py-4">
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-3">
+            HEAD-TO-HEAD MATRIX
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[11px] font-mono">
+              <thead>
+                <tr className="border-b border-[#27272A] text-neutral-500">
+                  <th className="text-left py-2 px-2">ALGORITHM</th>
+                  <th className="text-left py-2 px-2">COMPLEXITY</th>
+                  <th className="text-right py-2 px-2">COST</th>
+                  <th className="text-right py-2 px-2">TIME</th>
+                  <th className="text-right py-2 px-2">GAP %</th>
+                  <th className="text-right py-2 px-2">vs FASTEST</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runs.map((r) => {
+                  const slow =
+                    fastest && r.elapsed_ms != null
+                      ? r.elapsed_ms / fastest.elapsed_ms
+                      : null;
+                  return (
+                    <tr key={r.algorithm} className="border-b border-[#1A1A1D]">
+                      <td className="py-2 px-2 text-white">{r.meta.label}</td>
+                      <td className="py-2 px-2 text-[#FDE047]">{r.meta.complexity}</td>
+                      <td className="py-2 px-2 text-right">
+                        {r.total_cost != null
+                          ? `${r.total_cost.toFixed(2)}${u && " " + u}`
+                          : "—"}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {r.elapsed_ms != null ? `${r.elapsed_ms.toFixed(2)} ms` : "—"}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {r.is_optimal ? (
+                          <span className="text-[#22C55E]">OPTIMAL</span>
+                        ) : r.gap_pct != null ? (
+                          <span className="text-[#F59E0B]">+{r.gap_pct.toFixed(2)}%</span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-right text-neutral-400">
+                        {slow != null ? `${slow.toFixed(2)}×` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-[#0A0A0C] px-6 py-4 text-[11px] font-mono text-neutral-500 leading-relaxed">
+          <span className="text-[#FDE047]">↪</span> <strong className="text-white">Held-Karp</strong>{" "}
+          and <strong className="text-white">Backtracking</strong> are exact (always optimal).
+          <strong className="text-white"> Greedy NN</strong> is a heuristic — fast but may overshoot
+          the optimum (see GAP %).
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function Metric({ label, value, accent, tone }) {
+  const color =
+    tone === "success"
+      ? "#22C55E"
+      : tone === "warn"
+      ? "#F59E0B"
+      : accent
+      ? "#FDE047"
+      : "#FFFFFF";
+  return (
+    <div className="border border-[#27272A] bg-[#050505] p-2.5">
+      <div className="text-[9px] font-mono uppercase tracking-[0.18em] text-neutral-500">
+        {label}
+      </div>
+      <div className="font-mono text-[14px] mt-1" style={{ color }}>
+        {value}
+      </div>
+    </div>
   );
 }
 
